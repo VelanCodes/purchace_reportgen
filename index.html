@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Tax Report Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Library for parsing CSV files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <!-- Library for parsing XLSX files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-7xl bg-white rounded-xl shadow-lg p-6 md:p-8"> <!-- Increased max-width for new column -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Purchase Tax Report Generator</h1>
+            <p class="text-gray-600 mt-2">Upload your CSV or XLSX file to group purchases by party and GST rate.</p>
+        </div>
+
+        <!-- File Upload Section -->
+        <div id="upload-container" class="mb-6 p-6 border-2 border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500 transition-colors">
+            <input type="file" id="file-input" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" class="hidden">
+            <label for="file-input" class="cursor-pointer">
+                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <p class="mt-2 text-lg font-medium text-blue-600">Click to upload a file</p>
+                <p class="mt-1 text-sm text-gray-500">or drag and drop your CSV or XLSX here</p>
+            </label>
+        </div>
+
+        <!-- Status and Error Messages -->
+        <div id="message-container" class="text-center my-4"></div>
+
+        <!-- Results Table -->
+        <div id="results-container" class="hidden mt-8">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Generated Report</h2>
+            <div class="table-container border border-gray-200 rounded-lg">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr id="results-header">
+                            <!-- Header will be dynamically generated -->
+                        </tr>
+                    </thead>
+                    <tbody id="results-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Body will be dynamically generated -->
+                    </tbody>
+                    <tfoot id="results-footer" class="bg-gray-50 font-bold">
+                        <!-- Footer for totals will be dynamically generated -->
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Download Button -->
+        <div class="text-center mt-6">
+            <button id="download-button" class="hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors">
+                Download Report (XLSX)
+            </button>
+        </div>
+
+        <!-- Column Name Note -->
+        <div class="mt-6 text-sm text-gray-500 bg-gray-50 p-4 rounded-lg">
+            <h4 class="font-semibold text-gray-700">Important Note:</h4>
+            <p>This tool now assumes your file has columns named <code class="bg-gray-200 px-1 rounded">'Stockist Name'</code>, <code class="bg-gray-200 px-1 rounded">'GST No'</code>, <code class="bg-gray-200 px-1 rounded">'Amount'</code> (for taxable value), <code class="bg-gray-200 px-1 rounded">'CGST %'</code>, <code class="bg-gray-200 px-1 rounded">'SGST %'</code>, <code class="bg-gray-200 px-1 rounded">'CGST Amt.'</code>, and <code class="bg-gray-200 px-1 rounded">'SGST Amt.'</code>. If your columns have different names, the report might not generate correctly.</p>
+        </div>
+    </div>
+
+    <script>
+        const uploadContainer = document.getElementById('upload-container');
+        const fileInput = document.getElementById('file-input');
+        const resultsContainer = document.getElementById('results-container');
+        const resultsHeader = document.getElementById('results-header');
+        const resultsBody = document.getElementById('results-body');
+        const resultsFooter = document.getElementById('results-footer');
+        const messageContainer = document.getElementById('message-container');
+        const downloadButton = document.getElementById('download-button');
+
+        let exportableData = [];
+
+        const handleFileSelect = (file) => {
+            if (!file) return;
+            resultsContainer.classList.add('hidden');
+            downloadButton.classList.add('hidden');
+            exportableData = [];
+            messageContainer.innerHTML = '';
+
+            const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
+            const isXlsx = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.name.toLowerCase().endsWith('.xlsx');
+
+            if (isCsv) {
+                showMessage('Processing your CSV file...', 'text-blue-600');
+                parseCSV(file);
+            } else if (isXlsx) {
+                showMessage('Processing your XLSX file...', 'text-blue-600');
+                parseXLSX(file);
+            } else {
+                showMessage('Please upload a valid CSV or XLSX file.', 'text-red-600');
+                resultsContainer.classList.add('hidden');
+                downloadButton.classList.add('hidden');
+            }
+        };
+
+        uploadContainer.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+            e.target.value = null;
+        });
+
+        uploadContainer.addEventListener('dragover', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            uploadContainer.classList.add('border-blue-500', 'bg-blue-50');
+        });
+        uploadContainer.addEventListener('dragleave', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            uploadContainer.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+        uploadContainer.addEventListener('drop', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            uploadContainer.classList.remove('border-blue-500', 'bg-blue-50');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        function showMessage(message, colorClass) {
+            if (messageContainer) {
+                messageContainer.innerHTML = `<p class="${colorClass} font-medium">${message}</p>`;
+            } else {
+                console.error("Message container not found!");
+            }
+        }
+
+        function parseCSV(file) {
+            Papa.parse(file, {
+                header: true, skipEmptyLines: true,
+                complete: function(results) {
+                    if (results.errors.length > 0) {
+                        console.error("CSV Parsing Errors:", results.errors);
+                        showMessage(`Error parsing CSV: ${results.errors[0].message}. Please check file format.`, 'text-red-600');
+                        return;
+                    }
+                    if (!results.data || results.data.length === 0) {
+                        showMessage('CSV file is empty or could not be read properly.', 'text-red-600');
+                        return;
+                    }
+                    processData(results.data);
+                },
+                error: function(error) {
+                    console.error("PapaParse Error:", error);
+                    showMessage(`Error parsing CSV: ${error.message}`, 'text-red-600');
+                }
+            });
+        }
+
+        function parseXLSX(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    if (!firstSheetName) {
+                        showMessage('XLSX file does not contain any sheets.', 'text-red-600');
+                        return;
+                    }
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                     if (!jsonData || jsonData.length === 0) {
+                        showMessage('XLSX sheet is empty or could not be read properly.', 'text-red-600');
+                        return;
+                    }
+                    processData(jsonData);
+                } catch (error) {
+                    console.error("XLSX Parsing Error:", error);
+                    showMessage(`Error parsing XLSX file: ${error.message || error}. Check console for details.`, 'text-red-600');
+                }
+            };
+            reader.onerror = function(error) {
+                console.error("File Reading Error:", error);
+                showMessage(`Error reading file: ${error.message || error}`, 'text-red-600');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processData(data) {
+            const partyCol = 'Stockist Name';
+            const gstNoCol = 'GST No'; // New column for GST Number
+            const taxableValueCol = 'Amount';
+            const cgstRateCol = 'CGST %';
+            const sgstRateCol = 'SGST %';
+            const cgstAmtCol = 'CGST Amt.';
+            const sgstAmtCol = 'SGST Amt.';
+
+            if (!data || data.length === 0) {
+                showMessage(`Error: The file is empty or no data was processed.`, 'text-red-600');
+                return;
+            }
+
+            const firstRow = data[0];
+            const requiredCols = [partyCol, gstNoCol, taxableValueCol, cgstRateCol, sgstRateCol, cgstAmtCol, sgstAmtCol]; // Added gstNoCol
+            if (!requiredCols.every(col => col in firstRow)) {
+                const missingCols = requiredCols.filter(col => !(col in firstRow));
+                showMessage(`Error: Missing required columns: ${missingCols.join(', ')}. Please check the note below. Found columns in first row: ${Object.keys(firstRow).join(', ')}`, 'text-red-600');
+                return;
+            }
+
+            const groupedData = {};
+            let hasValidRows = false;
+            data.forEach(row => {
+                const partyName = row[partyCol];
+                const gstNumber = row[gstNoCol] || ''; // Get GST Number, default to empty string if not present
+
+                if (!partyName || row[taxableValueCol] === undefined || row[cgstRateCol] === undefined || row[sgstRateCol] === undefined || row[cgstAmtCol] === undefined || row[sgstAmtCol] === undefined) {
+                    return;
+                }
+                hasValidRows = true;
+
+                if (!groupedData[partyName]) {
+                    groupedData[partyName] = {
+                        'gstNo': gstNumber, // Store the GST number
+                        'Amount': 0,
+                        'gst_0': 0, 'gst_5': 0, 'gst_12': 0, 'gst_18': 0
+                    };
+                }
+                // If the party already exists, we assume the GST number is consistent.
+                // If it might vary and you need to handle that, more complex logic is needed.
+
+                const taxableValue = parseFloat(row[taxableValueCol] || 0);
+                const cgstRate = parseFloat(String(row[cgstRateCol]).replace('%', '')) || 0;
+                const sgstRate = parseFloat(String(row[sgstRateCol]).replace('%', '')) || 0;
+                const cgstAmount = parseFloat(row[cgstAmtCol] || 0);
+                const sgstAmount = parseFloat(row[sgstAmtCol] || 0);
+
+                const totalGstRate = cgstRate + sgstRate;
+                const totalGstAmount = cgstAmount + sgstAmount;
+
+                groupedData[partyName]['Amount'] += taxableValue;
+                const roundedGstRate = Math.round(totalGstRate);
+
+                if (roundedGstRate === 0) groupedData[partyName]['gst_0'] += totalGstAmount;
+                else if (roundedGstRate === 5) groupedData[partyName]['gst_5'] += totalGstAmount;
+                else if (roundedGstRate === 12) groupedData[partyName]['gst_12'] += totalGstAmount;
+                else if (roundedGstRate === 18) groupedData[partyName]['gst_18'] += totalGstAmount;
+            });
+
+            if (!hasValidRows && Object.keys(groupedData).length === 0) {
+                showMessage('No valid data rows found in the file to process.', 'text-red-600');
+                return;
+            }
+            if (Object.keys(groupedData).length === 0) {
+                 showMessage('Data processed, but no groups were formed. Check "Stockist Name" column and data validity.', 'text-yellow-600');
+                 return;
+            }
+
+            displayResults(groupedData);
+        }
+
+        function displayResults(groupedData) {
+            resultsHeader.innerHTML = '';
+            resultsBody.innerHTML = '';
+            resultsFooter.innerHTML = '';
+            exportableData = [];
+
+            // Updated headers for the report table
+            const reportTableHeaders = ['Sl.No', 'Name', 'GST No.', 'Total Taxable Amount', 'Total GST @ 0%', 'Total GST @ 5%', 'Total GST @ 12%', 'Total GST @ 18%'];
+            exportableData.push(reportTableHeaders);
+
+            reportTableHeaders.forEach(headerText => {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+                th.textContent = headerText;
+                resultsHeader.appendChild(th);
+            });
+
+            let serialNumber = 1;
+            const totals = { 'Amount': 0, 'gst_0': 0, 'gst_5': 0, 'gst_12': 0, 'gst_18': 0 };
+            const formatCurrency = (num) => {
+                if (typeof num !== 'number' || isNaN(num)) return '0.00';
+                return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            };
+            const sortedPartyNames = Object.keys(groupedData).sort();
+
+            if (sortedPartyNames.length === 0) {
+                showMessage('No data to display in the report.', 'text-yellow-600');
+                resultsContainer.classList.add('hidden');
+                downloadButton.classList.add('hidden');
+                return;
+            }
+
+            for (const partyName of sortedPartyNames) {
+                const rowData = groupedData[partyName];
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50';
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${serialNumber}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700">${partyName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${rowData['gstNo'] || ''}</td> <!-- Display GST No. -->
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${formatCurrency(rowData['Amount'])}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${formatCurrency(rowData['gst_0'])}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${formatCurrency(rowData['gst_5'])}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${formatCurrency(rowData['gst_12'])}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${formatCurrency(rowData['gst_18'])}</td>
+                `;
+                resultsBody.appendChild(tr);
+
+                const dataRowForExport = [
+                    serialNumber,
+                    partyName,
+                    rowData['gstNo'] || '', // Add GST No. for export
+                    rowData['Amount'],
+                    rowData['gst_0'],
+                    rowData['gst_5'],
+                    rowData['gst_12'],
+                    rowData['gst_18']
+                ];
+                exportableData.push(dataRowForExport);
+
+                Object.keys(totals).forEach(key => totals[key] += (rowData[key] || 0) );
+                serialNumber++;
+            }
+
+            const footerRow = document.createElement('tr');
+            // Adjusted colspan for the "Total" label in the footer
+            footerRow.innerHTML = `
+                <td class="px-6 py-4 text-sm text-gray-800" colspan="3"><strong>Total</strong></td>
+                <td class="px-6 py-4 text-sm text-gray-800 text-right"><strong>${formatCurrency(totals['Amount'])}</strong></td>
+                <td class="px-6 py-4 text-sm text-gray-800 text-right"><strong>${formatCurrency(totals['gst_0'])}</strong></td>
+                <td class="px-6 py-4 text-sm text-gray-800 text-right"><strong>${formatCurrency(totals['gst_5'])}</strong></td>
+                <td class="px-6 py-4 text-sm text-gray-800 text-right"><strong>${formatCurrency(totals['gst_12'])}</strong></td>
+                <td class="px-6 py-4 text-sm text-gray-800 text-right"><strong>${formatCurrency(totals['gst_18'])}</strong></td>
+            `;
+            resultsFooter.appendChild(footerRow);
+
+            const totalsRowForExport = [
+                '',
+                'Total',
+                '', // Empty for GST No. in totals row
+                totals['Amount'],
+                totals['gst_0'],
+                totals['gst_5'],
+                totals['gst_12'],
+                totals['gst_18']
+            ];
+            exportableData.push(totalsRowForExport);
+
+            resultsContainer.classList.remove('hidden');
+            downloadButton.classList.remove('hidden');
+            showMessage('Report generated successfully!', 'text-green-600');
+        }
+
+        function exportToXLSX() {
+            if (exportableData.length <= 1) {
+                showMessage('No data available to export.', 'text-yellow-600');
+                return;
+            }
+
+            const worksheet = XLSX.utils.aoa_to_sheet(exportableData);
+            // Adjusted column widths for the new GST No. column
+            const columnWidths = [
+                {wch: 6},  // Sl.No
+                {wch: 30}, // Name
+                {wch: 18}, // GST No.
+                {wch: 20}, // Total Taxable Amount
+                {wch: 18}, // Total GST @ 0%
+                {wch: 18}, // Total GST @ 5%
+                {wch: 18}, // Total GST @ 12%
+                {wch: 18}  // Total GST @ 18%
+            ];
+            worksheet['!cols'] = columnWidths;
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Purchase Tax Report");
+
+            try {
+                XLSX.writeFile(workbook, "Purchase_Tax_Report.xlsx");
+            } catch (error) {
+                console.error("XLSX Export Error:", error);
+                showMessage(`Error exporting to XLSX: ${error.message || error}. Check console.`, 'text-red-600');
+            }
+        }
+
+        downloadButton.addEventListener('click', exportToXLSX);
+
+    </script>
+</body>
+</html>
