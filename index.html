@@ -68,7 +68,6 @@
               messageContainer = getElem('message-container'), downloadButton = getElem('download-button');
         let exportableData = [];
 
-        // --- MODIFICATION: Moved gstSlabs to a higher scope ---
         const gstSlabs = [
             { totalRate: 0,  cgstRate: 0,   sgstRate: 0,   igstRate: 0,   label: "0" },
             { totalRate: 5,  cgstRate: 2.5, sgstRate: 2.5, igstRate: 5,   label: "5" },
@@ -76,7 +75,6 @@
             { totalRate: 18, cgstRate: 9,   sgstRate: 9,   igstRate: 18,  label: "18" },
             { totalRate: 28, cgstRate: 14,  sgstRate: 14,  igstRate: 28,  label: "28" }
         ];
-        // --- END MODIFICATION ---
 
 
         const handleFileSelect = file => {
@@ -149,26 +147,57 @@
             if (dateStrOrObj instanceof Date && !isNaN(dateStrOrObj)) {
                 return dateStrOrObj;
             }
-            if (typeof dateStrOrObj !== 'string' && typeof dateStrOrObj !== 'number') return null; // Excel dates can be numbers
+            if (typeof dateStrOrObj !== 'string' && typeof dateStrOrObj !== 'number') return null; 
 
-            if (typeof dateStrOrObj === 'number') { // Handle Excel serial date number
-                const excelEpoch = new Date(1899, 11, 30); // Excel epoch starts Dec 30, 1899 for compatibility
-                const jsDate = new Date(excelEpoch.getTime() + dateStrOrObj * 24 * 60 * 60 * 1000);
+            if (typeof dateStrOrObj === 'number') { 
+                const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // Use UTC for Excel epoch base
+                // Excel for Windows stores dates as days since Dec 30, 1899.
+                // Excel for Mac (before 2008) used Jan 1, 1904. Assuming Windows epoch.
+                // Add the number of days (dateStrOrObj) to this epoch.
+                // Subtract 1 if dateStrOrObj > 59 due to Excel's 1900 leap year bug if precision is extreme for very old dates.
+                // For modern dates, this is usually fine.
+                const jsDate = new Date(excelEpoch.getTime() + (dateStrOrObj -1) * 24 * 60 * 60 * 1000); // Typical adjustment for Excel serial
                 if (jsDate && !isNaN(jsDate)) return jsDate;
             }
             
             if (typeof dateStrOrObj !== 'string') return null;
 
-
-            const formats = [
-                (ds) => { const parts = ds.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/); return parts ? new Date(parts[3].length === 2 ? '20'+parts[3] : parts[3], parseInt(parts[2])-1, parseInt(parts[1])) : null; }, 
-                (ds) => { const parts = ds.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/); return parts ? new Date(parseInt(parts[1]), parseInt(parts[2])-1, parseInt(parts[3])) : null; }, 
-                (ds) => { const parts = ds.match(/^(\d{1,2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2,4})$/i); 
-                           if(parts) { const months = {"jan":0,"feb":1,"mar":2,"apr":3,"may":4,"jun":5,"jul":6,"aug":7,"sep":8,"oct":9,"nov":10,"dec":11}; return new Date(parts[3].length === 2 ? '20'+parts[3] : parts[3], months[parts[2].toLowerCase()], parseInt(parts[1])); } return null; }
+            // Try common string formats
+            const datePartsRegex = [
+                /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/, // dd/mm/yy(yy) or mm/dd/yy(yy) - ambiguous, assume dd/mm
+                /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/, // yyyy/mm/dd
+                /^(\d{1,2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2,4})$/i // dd-Mon-yy(yy)
             ];
-            for (const fmtFunc of formats) {
-                const date = fmtFunc(dateStrOrObj);
-                if (date && !isNaN(date)) return date;
+            const monthMap = {"jan":0,"feb":1,"mar":2,"apr":3,"may":4,"jun":5,"jul":6,"aug":7,"sep":8,"oct":9,"nov":10,"dec":11};
+
+            for (const regex of datePartsRegex) {
+                const parts = dateStrOrObj.match(regex);
+                if (parts) {
+                    let day, month, year;
+                    if (regex === datePartsRegex[0]) { // dd/mm/yy or mm/dd/yy
+                        // Heuristic: if first part > 12, assume it's day (dd/mm)
+                        day = parseInt(parts[1]);
+                        month = parseInt(parts[2]);
+                        if (day > 12) { // Likely dd/mm/yyyy
+                           // day = parseInt(parts[1]); month = parseInt(parts[2]); // already set
+                        } else { // Ambiguous or mm/dd/yyyy - for now, stick to dd/mm
+                           // day = parseInt(parts[1]); month = parseInt(parts[2]); // already set
+                        }
+                        year = parseInt(parts[3]);
+                        if (year < 100) year += 2000; // yy to yyyy
+                    } else if (regex === datePartsRegex[1]) { // yyyy/mm/dd
+                        year = parseInt(parts[1]); month = parseInt(parts[2]); day = parseInt(parts[3]);
+                    } else if (regex === datePartsRegex[2]) { // dd-Mon-yy
+                        day = parseInt(parts[1]); month = monthMap[parts[2].toLowerCase()] + 1; // monthMap is 0-indexed
+                        year = parseInt(parts[3]);
+                        if (year < 100) year += 2000;
+                    }
+                    if (year && month && day) {
+                         // Month is 0-indexed for JS Date constructor
+                        const date = new Date(Date.UTC(year, month - 1, day));
+                        if (!isNaN(date)) return date;
+                    }
+                }
             }
             const directParse = new Date(dateStrOrObj); 
             return (directParse && !isNaN(directParse)) ? directParse : null;
@@ -196,16 +225,11 @@
                 if (!invNo) return;
 
                 const parsedInvDate = parseDate(row[C.INV_DATE]);
-                if (!parsedInvDate) {
-                    console.warn(`Skipping Inv ${invNo} due to unparseable date: ${row[C.INV_DATE]}`);
-                    // Decide if you want to skip or use a default/original string
-                    // return; // Uncomment to skip if date is absolutely mandatory
-                }
-
+                
                 if (!invoicesData[invNo]) {
                     invoicesData[invNo] = {
                         invDateObj: parsedInvDate, 
-                        invDateStr: String(row[C.INV_DATE] || ''), // Keep original for display if parse fails
+                        invDateStr: String(row[C.INV_DATE] || ''), 
                         supplier: row[C.PARTY],
                         gstin: row[C.GST_NO] || '',
                         totalTaxableAmount: 0,
@@ -260,25 +284,25 @@
             if (Object.keys(invoicesData).length === 0) {
                 showMsg('No valid invoice data processed.', 'yellow'); return;
             }
-            displayResults(invoicesData); // gstSlabs is now global
+            displayResults(invoicesData);
         }
 
-        function displayResults(invoicesData) { // gstSlabs is now global
+        function displayResults(invoicesData) {
             resultsHeader.innerHTML = ''; resultsBody.innerHTML = ''; resultsFooter.innerHTML = '';
             exportableData = [];
 
-            const baseHeaders = ['Sl.No', 'Invoice No', 'Invoice Date', 'Supplier', 'GSTIN', 'Total Taxable'];
+            const baseHeaders = ['Sl.No', 'Inv No', 'Inv Date', 'Supplier', 'GSTIN', 'Total Taxable'];
             let slabHeaders = [];
             gstSlabs.forEach(slab => { 
                 slabHeaders.push(`Taxable @${slab.totalRate}%`);
                 slabHeaders.push(`CGST ${slab.cgstRate}%`); 
-                slabHeaders.push(`INPUT CGST ${slab.cgstRate}%`); 
+                slabHeaders.push(`INPUT CGST ${slab.cgstRate}% Amt`); 
                 slabHeaders.push(`SGST ${slab.sgstRate}%`);
-                slabHeaders.push(`INPUT SGST ${slab.sgstRate}%`);
+                slabHeaders.push(`INPUT SGST ${slab.sgstRate}% Amt`);
                 slabHeaders.push(`IGST ${slab.igstRate}%`);
-                slabHeaders.push(`INPUT IGST ${slab.igstRate}%`);
+                slabHeaders.push(`INPUT IGST ${slab.igstRate}% Amt`);
             });
-            const finalHeaders = ['Total GST Amount', 'Total Invoice Value'];
+            const finalHeaders = ['Total GST Amt', 'Total Inv Value'];
             const allHeaders = [...baseHeaders, ...slabHeaders, ...finalHeaders];
             exportableData.push(allHeaders);
 
@@ -300,10 +324,10 @@
             const sortedInvoiceKeys = Object.keys(invoicesData).sort((keyA, keyB) => {
                 const dateA = invoicesData[keyA].invDateObj;
                 const dateB = invoicesData[keyB].invDateObj;
-                if (!dateA && !dateB) return 0; // if both dates are invalid, don't change order
-                if (!dateA) return 1; // invoices with invalid dates go to the end
-                if (!dateB) return -1; // invoices with invalid dates go to the end
-                return dateA.getTime() - dateB.getTime(); // Standard date comparison
+                if (!dateA && !dateB) return 0; 
+                if (!dateA) return 1; 
+                if (!dateB) return -1;
+                return dateA.getTime() - dateB.getTime(); 
             });
 
             sortedInvoiceKeys.forEach(invNo => {
@@ -311,7 +335,6 @@
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50';
                 const displayDate = inv.invDateObj ? inv.invDateObj.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) : inv.invDateStr;
-
 
                 let rowHtml = `
                     <td>${slNo}</td>
@@ -404,34 +427,34 @@
             const colsPerSlab = 7; 
             
             const colWidths = [ {wch:5}, {wch:12}, {wch:12}, {wch:25}, {wch:15}, {wch:14} ]; 
-            // --- MODIFICATION: Use global gstSlabs here ---
             gstSlabs.forEach(() => { 
                 colWidths.push({wch:12}, {wch:8}, {wch:12}, {wch:8}, {wch:12}, {wch:8}, {wch:12});
             });
-            // --- END MODIFICATION ---
             colWidths.push({wch:14}, {wch:15}); 
             ws['!cols'] = colWidths;
+
+            const allHeadersForExport = exportableData[0]; 
 
             for (let R = 1; R < exportableData.length; ++R) { 
                 for (let C = 0; C < exportableData[R].length; ++C) {
                     const cellValue = exportableData[R][C];
                     if (typeof cellValue === 'number') {
                         const cell_address = XLSX.utils.encode_cell({c:C, r:R});
+                        // Ensure cell object exists
                         if(!ws[cell_address]) ws[cell_address] = {v: cellValue}; else ws[cell_address].v = cellValue;
                         ws[cell_address].t = 'n';
                         
-                        let isRateCol = false;
-                        // --- MODIFICATION: Use global gstSlabs here ---
-                        if (C >= baseColCount && C < baseColCount + gstSlabs.length * colsPerSlab) {
-                        // --- END MODIFICATION ---
-                            const slabColIdx = (C - baseColCount) % colsPerSlab;
-                            if (slabColIdx === 1 || slabColIdx === 3 || slabColIdx === 5) isRateCol = true; 
-                        }
+                        const headerText = allHeadersForExport[C] || "";
+                        // Check if it's a rate column (contains '%' but not 'Amt')
+                        // AND cellValue is not an empty string (which we push for export if rate is not applicable)
+                        const isRateColWithValue = headerText.includes('%') && !headerText.toLowerCase().includes('amt') && exportableData[R][C] !== '';
 
-                        if (isRateCol && cellValue !== '') { // Apply % format only if value is not blank
+                        if (isRateColWithValue) { 
                              ws[cell_address].z = '0.0"%"'; 
-                        } else if (!isRateCol) { // Apply amount format
+                        } else if (!headerText.includes('%') || headerText.toLowerCase().includes('amt')) { // Amount column
                              ws[cell_address].z = '#,##0.00'; 
+                        } else { // Default for other numbers (e.g. rate 0 if it was pushed as number)
+                             ws[cell_address].z = '0.00'; 
                         }
                     }
                 }
