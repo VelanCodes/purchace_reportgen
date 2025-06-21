@@ -267,18 +267,18 @@
             resultsHeader.innerHTML = ''; resultsBody.innerHTML = ''; resultsFooter.innerHTML = '';
             exportableData = [];
 
-            const baseHeaders = ['Sl.No', 'Inv No', 'Inv Date', 'Supplier', 'GSTIN', 'Total Taxable'];
+            const baseHeaders = ['Sl.No', 'Invoice No', 'Invoice Date', 'Supplier', 'GSTIN', 'Total Taxable'];
             let slabHeaders = [];
             gstSlabs.forEach(slab => { 
                 slabHeaders.push(`Taxable @${slab.totalRate}%`);
                 slabHeaders.push(`CGST ${slab.cgstRate}%`); 
-                slabHeaders.push(`CGST ${slab.cgstRate}% Amt`); 
+                slabHeaders.push(`INPUT CGST ${slab.cgstRate}%`); 
                 slabHeaders.push(`SGST ${slab.sgstRate}%`);
-                slabHeaders.push(`SGST ${slab.sgstRate}% Amt`);
+                slabHeaders.push(`INPUT SGST ${slab.sgstRate}%`);
                 slabHeaders.push(`IGST ${slab.igstRate}%`);
-                slabHeaders.push(`IGST ${slab.igstRate}% Amt`);
+                slabHeaders.push(`INPUT IGST ${slab.igstRate}%`);
             });
-            const finalHeaders = ['Total GST Amt', 'Total Inv Value'];
+            const finalHeaders = ['Total GST Amount', 'Total Invoice Value'];
             const allHeaders = [...baseHeaders, ...slabHeaders, ...finalHeaders];
             exportableData.push(allHeaders);
 
