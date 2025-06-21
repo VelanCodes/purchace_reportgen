@@ -3,504 +3,380 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Purchase Tax Report v2</title>
+    <title>Detailed GST Invoice Report</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Library for parsing CSV files -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-    <!-- Library for parsing XLSX files -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .table-container {
-            overflow-x: auto;
-        }
-        /* Ensure table cells don't wrap excessively, making the wide table scrollable */
-        th, td {
-            white-space: nowrap;
-            padding-left: 0.75rem; /* Equivalent to px-3 */
-            padding-right: 0.75rem;
-            padding-top: 0.5rem; /* Equivalent to py-2 */
-            padding-bottom: 0.5rem;
-        }
-        /* More specific padding for header cells if needed from Tailwind's py-3 */
-        thead th {
-            padding-top: 0.75rem;
-            padding-bottom: 0.75rem;
-        }
+        body { font-family: 'Inter', sans-serif; }
+        .table-container { overflow-x: auto; }
+        th, td { white-space: nowrap; padding: 0.5rem 0.75rem; /* py-2 px-3 */ }
+        thead th { padding-top: 0.75rem; padding-bottom: 0.75rem; /* py-3 */ }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
 
-    <div class="w-full max-w-full bg-white rounded-xl shadow-lg p-6 md:p-8"> <!-- Set max-w-full for wide table -->
+    <div class="w-full max-w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
         <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold text-gray-900">Advanced Purchase Tax Report</h1>
-            <p class="text-gray-600 mt-2">Invoice-wise summary with detailed GST breakdowns.</p>
+            <h1 class="text-3xl font-bold text-gray-900">Detailed GST Invoice Report</h1>
+            <p class="text-gray-600 mt-2">One row per invoice with GST slab breakdowns.</p>
         </div>
 
-        <!-- File Upload Section -->
         <div id="upload-container" class="mb-6 p-6 border-2 border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500 transition-colors">
-            <input type="file" id="file-input" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" class="hidden">
+            <input type="file" id="file-input" accept=".csv, .xlsx" class="hidden">
             <label for="file-input" class="cursor-pointer">
-                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <p class="mt-2 text-lg font-medium text-blue-600">Click to upload a file</p>
-                <p class="mt-1 text-sm text-gray-500">or drag and drop your CSV or XLSX here</p>
+                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                <p class="mt-2 text-lg font-medium text-blue-600">Click to upload</p>
+                <p class="mt-1 text-sm text-gray-500">or drag and drop CSV/XLSX</p>
             </label>
         </div>
 
-        <!-- Status and Error Messages -->
         <div id="message-container" class="text-center my-4" aria-live="polite"></div>
 
-        <!-- Results Table -->
         <div id="results-container" class="hidden mt-8">
             <h2 class="text-2xl font-semibold mb-4 text-center">Generated Report</h2>
             <div class="table-container border border-gray-200 rounded-lg">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
-                        <tr id="results-header">
-                            <!-- Header will be dynamically generated -->
-                        </tr>
+                        <tr id="results-header"></tr>
                     </thead>
-                    <tbody id="results-body" class="bg-white divide-y divide-gray-200">
-                        <!-- Body will be dynamically generated -->
-                    </tbody>
-                    <tfoot id="results-footer" class="bg-gray-50 font-bold">
-                        <!-- Footer for totals will be dynamically generated -->
-                    </tfoot>
+                    <tbody id="results-body" class="bg-white divide-y divide-gray-200"></tbody>
+                    <tfoot id="results-footer" class="bg-gray-50 font-bold"></tfoot>
                 </table>
             </div>
         </div>
 
-        <!-- Download Button -->
         <div class="text-center mt-6">
             <button id="download-button" class="hidden bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors">
                 Download Report (XLSX)
             </button>
         </div>
 
-        <!-- Column Name Note -->
         <div class="mt-6 text-sm text-gray-500 bg-gray-50 p-4 rounded-lg">
-            <h4 class="font-semibold text-gray-700">Important Note:</h4>
-            <p>Required columns:
-                <code class="bg-gray-200 px-1 rounded">'Invoice No'</code>,
-                <code class="bg-gray-200 px-1 rounded">'Invoice Date'</code>,
-                <code class="bg-gray-200 px-1 rounded">'Stockist Name'</code>,
-                <code class="bg-gray-200 px-1 rounded">'GST No'</code>,
-                <code class="bg-gray-200 px-1 rounded">'Amount'</code> (taxable value for the item),
-                <code class="bg-gray-200 px-1 rounded">'CGST %'</code>,
-                <code class="bg-gray-200 px-1 rounded">'SGST %'</code>.
-            </p>
-            <p class="mt-1">Optional columns (will be used if present, otherwise calculated or left empty):
-                <code class="bg-gray-200 px-1 rounded">'IGST %'</code>,
-                <code class="bg-gray-200 px-1 rounded">'CGST Amt.'</code>,
-                <code class="bg-gray-200 px-1 rounded">'SGST Amt.'</code>,
-                <code class="bg-gray-200 px-1 rounded">'IGST Amt.'</code>.
-            </p>
-            <p class="mt-1">If GST amount columns are provided and are valid, they will be used. Otherwise, GST amounts are calculated based on percentages and taxable value.</p>
+            <h4 class="font-semibold text-gray-700">Required Columns:</h4>
+            <p><code class="bg-gray-200 px-1 rounded">'Invoice No'</code>, <code class="bg-gray-200 px-1 rounded">'Invoice Date'</code>, <code class="bg-gray-200 px-1 rounded">'Stockist Name'</code>, <code class="bg-gray-200 px-1 rounded">'GST No'</code>, <code class="bg-gray-200 px-1 rounded">'Amount'</code> (taxable), <code class="bg-gray-200 px-1 rounded">'CGST %'</code>, <code class="bg-gray-200 px-1 rounded">'SGST %'</code>.</p>
+            <p class="mt-1">Optional: <code class="bg-gray-200 px-1 rounded">'IGST %'</code>, <code class="bg-gray-200 px-1 rounded">'CGST Amt.'</code>, <code class="bg-gray-200 px-1 rounded">'SGST Amt.'</code>, <code class="bg-gray-200 px-1 rounded">'IGST Amt.'</code> (used if valid, else calculated).</p>
         </div>
     </div>
 
     <script>
+        // --- (Standard file upload and parsing boilerplate - condensed) ---
         const getElem = id => document.getElementById(id);
-        const uploadContainer = getElem('upload-container');
-        const fileInput = getElem('file-input');
-        const resultsContainer = getElem('results-container');
-        const resultsHeader = getElem('results-header');
-        const resultsBody = getElem('results-body');
-        const resultsFooter = getElem('results-footer');
-        const messageContainer = getElem('message-container');
-        const downloadButton = getElem('download-button');
+        const uploadContainer = getElem('upload-container'), fileInput = getElem('file-input'),
+              resultsContainer = getElem('results-container'), resultsHeader = getElem('results-header'),
+              resultsBody = getElem('results-body'), resultsFooter = getElem('results-footer'),
+              messageContainer = getElem('message-container'), downloadButton = getElem('download-button');
         let exportableData = [];
 
-        const handleFileSelect = (file) => {
+        const handleFileSelect = file => { /* ... (same as before) ... */
             if (!file) return;
-            resultsContainer.classList.add('hidden');
-            downloadButton.classList.add('hidden');
-            exportableData = [];
-            messageContainer.innerHTML = '';
-
+            [resultsContainer, downloadButton].forEach(el => el.classList.add('hidden'));
+            exportableData = []; messageContainer.innerHTML = '';
             const isCsv = file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv');
-            const isXlsx = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.name.toLowerCase().endsWith('.xlsx');
-
-            if (isCsv) {
-                showMsg('Processing your CSV file...', 'blue');
-                parseCSV(file);
-            } else if (isXlsx) {
-                showMsg('Processing your XLSX file...', 'blue');
-                parseXLSX(file);
-            } else {
-                showMsg('Please upload a valid CSV or XLSX file.', 'red');
-            }
+            const isXlsx = file.type.includes('spreadsheetml.sheet') || file.name.toLowerCase().endsWith('.xlsx');
+            if (isCsv) { showMsg('Processing CSV...', 'blue'); parseCSV(file); }
+            else if (isXlsx) { showMsg('Processing XLSX...', 'blue'); parseXLSX(file); }
+            else { showMsg('Invalid file type.', 'red'); }
         };
-
-        uploadContainer.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files.length > 0) {
-                handleFileSelect(e.target.files[0]);
-            }
-            e.target.value = null; // Reset file input
-        });
-
-        ['dragover', 'dragleave', 'drop'].forEach(eventName => {
-            uploadContainer.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (eventName === 'dragover') {
-                    uploadContainer.classList.add('border-blue-500', 'bg-blue-50');
-                } else {
-                    uploadContainer.classList.remove('border-blue-500', 'bg-blue-50');
-                }
-                if (eventName === 'drop' && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    handleFileSelect(e.dataTransfer.files[0]);
-                }
-            });
-        });
-
-        const showMsg = (message, color) => {
-            const colorClass = color === 'red' ? 'text-red-600' : (color === 'green' ? 'text-green-600' : 'text-blue-600');
-            messageContainer.innerHTML = `<p class="${colorClass} font-medium">${message}</p>`;
+        uploadContainer.onclick = () => fileInput.click();
+        fileInput.onchange = e => { if (e.target.files.length) handleFileSelect(e.target.files[0]); e.target.value = null; };
+        ['dragover', 'dragleave', 'drop'].forEach(evt => uploadContainer.addEventListener(evt, e => {
+            e.preventDefault(); e.stopPropagation();
+            uploadContainer.classList.toggle('border-blue-500', evt === 'dragover');
+            uploadContainer.classList.toggle('bg-blue-50', evt === 'dragover');
+            if (evt === 'drop' && e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files[0]);
+        }));
+        const showMsg = (msg, color) => {
+             const colorClass = color === 'red' ? 'text-red-600' : (color === 'green' ? 'text-green-600' : 'text-blue-600');
+             messageContainer.innerHTML = `<p class="${colorClass} font-medium">${msg}</p>`;
         };
-
-        function parseCSV(file) {
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    if (results.errors.length > 0) {
-                        showMsg(`Error parsing CSV: ${results.errors[0].message}. Please check file format.`, 'red');
-                        console.error("CSV Parsing Errors:", results.errors);
-                        return;
-                    }
-                    if (!results.data || results.data.length === 0) {
-                        showMsg('CSV file is empty or could not be read properly.', 'red');
-                        return;
-                    }
-                    processData(results.data);
-                },
-                error: function(error) {
-                    showMsg(`Error parsing CSV: ${error.message}`, 'red');
-                    console.error("PapaParse Error:", error);
-                }
-            });
-        }
-
-        function parseXLSX(file) {
+        const parseCSV = file => Papa.parse(file, { header: true, skipEmptyLines: true, complete: res => res.errors.length ? showMsg(`CSV Error: ${res.errors[0].message}`, 'red') : (!res.data || !res.data.length ? showMsg('CSV empty.', 'red') : processData(res.data)), error: err => showMsg(`CSV Parse Error: ${err.message}`, 'red') });
+        const parseXLSX = file => { /* ... (same as before) ... */
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = e => {
                 try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const firstSheetName = workbook.SheetNames[0];
-                    if (!firstSheetName) {
-                        showMsg('XLSX file does not contain any sheets.', 'red');
-                        return;
-                    }
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                     if (!jsonData || jsonData.length === 0) {
-                        showMsg('XLSX sheet is empty or could not be read properly.', 'red');
-                        return;
-                    }
-                    processData(jsonData);
-                } catch (error) {
-                    showMsg(`Error parsing XLSX file: ${error.message || error}. Check console for details.`, 'red');
-                    console.error("XLSX Parsing Error:", error);
-                }
+                    const book = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                    const sheet = book.Sheets[book.SheetNames[0]];
+                    if (!sheet) { showMsg('XLSX no sheets.', 'red'); return; }
+                    const json = XLSX.utils.sheet_to_json(sheet);
+                    if (!json.length) { showMsg('XLSX sheet empty.', 'red'); return; }
+                    processData(json);
+                } catch (err) { showMsg(`XLSX Error: ${err.message || err}`, 'red'); console.error(err); }
             };
-            reader.onerror = function(error) {
-                showMsg(`Error reading file: ${error.message || error}`, 'red');
-                console.error("File Reading Error:", error);
-            };
+            reader.onerror = err => showMsg(`File Read Error: ${err.message || err}`, 'red');
             reader.readAsArrayBuffer(file);
-        }
+        };
+        // --- (End boilerplate) ---
 
         function processData(data) {
-            const C = { // Column names constants
+            const C = { // Column names
                 INV_NO: 'Invoice No', INV_DATE: 'Invoice Date', PARTY: 'Stockist Name', GST_NO: 'GST No',
                 TAXABLE: 'Amount', CGST_P: 'CGST %', SGST_P: 'SGST %', IGST_P: 'IGST %',
                 CGST_A: 'CGST Amt.', SGST_A: 'SGST Amt.', IGST_A: 'IGST Amt.'
             };
 
             const requiredCols = [C.INV_NO, C.INV_DATE, C.PARTY, C.GST_NO, C.TAXABLE, C.CGST_P, C.SGST_P];
-            if (!data[0] || !requiredCols.every(col => col in data[0])) {
+             if (!data[0] || !requiredCols.every(col => col in data[0])) {
                 const missing = data[0] ? requiredCols.filter(col => !(col in data[0])) : requiredCols;
-                showMsg(`Error: Missing required columns: ${missing.join(', ')}. Please check the note below. ${data[0] ? 'Found: ' + Object.keys(data[0]).join(', ') : ''}`, 'red');
+                showMsg(`Error: Missing required columns: ${missing.join(', ')}. Found: ${data[0] ? Object.keys(data[0]).join(', ') : 'No columns found in first row.'}`, 'red');
                 return;
             }
 
-            const invoicesMaster = {}; // Intermediate structure: { invNo: { details, items: [], gstBucketTotals: {} } }
+            const invoicesData = {}; // Key: invNo
+
+            const gstSlabs = [
+                { totalRate: 0, cgstRate: 0, sgstRate: 0, igstRate: 0, label: "0" },
+                { totalRate: 5, cgstRate: 2.5, sgstRate: 2.5, igstRate: 5, label: "5" },
+                { totalRate: 12, cgstRate: 6, sgstRate: 6, igstRate: 12, label: "12" },
+                { totalRate: 18, cgstRate: 9, sgstRate: 9, igstRate: 18, label: "18" },
+                { totalRate: 28, cgstRate: 14, sgstRate: 14, igstRate: 28, label: "28" }
+            ];
 
             data.forEach(row => {
                 const invNo = String(row[C.INV_NO] || '').trim();
-                if (!invNo) {
-                    console.warn("Skipping row with no Invoice No:", row);
-                    return;
-                }
+                if (!invNo) return;
 
-                if (!invoicesMaster[invNo]) {
-                    invoicesMaster[invNo] = {
-                        invoiceDate: row[C.INV_DATE],
-                        stockistName: row[C.PARTY],
-                        gstNo: row[C.GST_NO] || '',
-                        items: [],
-                        gstBucketTotals: { 0: 0, 5: 0, 12: 0, 18: 0, other: 0 } // For invoice-level fixed GST bucket totals (GST amounts)
+                if (!invoicesData[invNo]) {
+                    invoicesData[invNo] = {
+                        invDate: row[C.INV_DATE],
+                        supplier: row[C.PARTY],
+                        gstin: row[C.GST_NO] || '',
+                        totalTaxableAmount: 0,
+                        totalGstAmount: 0,
+                        slabs: {} // { "0": {taxable, cgstA, sgstA, igstA}, "5": {...} }
                     };
+                    gstSlabs.forEach(slab => {
+                        invoicesData[invNo].slabs[slab.label] = { taxable: 0, cgstA: 0, sgstA: 0, igstA: 0 };
+                    });
                 }
 
+                const currentInvoice = invoicesData[invNo];
                 const taxable = parseFloat(row[C.TAXABLE] || 0);
-                if (isNaN(taxable)) {
-                     console.warn("Skipping item due to invalid taxable amount:", row); return;
-                }
+                if (isNaN(taxable)) return;
 
-                const cgstP = parseFloat(String(row[C.CGST_P] || '0').replace('%', ''));
-                const sgstP = parseFloat(String(row[C.SGST_P] || '0').replace('%', ''));
-                const igstP = parseFloat(String(row[C.IGST_P] || '0').replace('%', ''));
+                currentInvoice.totalTaxableAmount += taxable;
 
-                let itemCgstA = parseFloat(row[C.CGST_A] || NaN); // Try to parse provided amount
+                const itemCgstP = parseFloat(String(row[C.CGST_P] || '0').replace('%', ''));
+                const itemSgstP = parseFloat(String(row[C.SGST_P] || '0').replace('%', ''));
+                const itemIgstP = parseFloat(String(row[C.IGST_P] || '0').replace('%', ''));
+
+                let itemCgstA = parseFloat(row[C.CGST_A] || NaN);
                 let itemSgstA = parseFloat(row[C.SGST_A] || NaN);
                 let itemIgstA = parseFloat(row[C.IGST_A] || NaN);
 
-                let calcTotalGstForItem = 0;
-                let actualCgstA = 0, actualSgstA = 0, actualIgstA = 0; // Store the amounts that will be used
+                let itemTotalGstAmount = 0;
+                let actualItemCgstA = 0, actualItemSgstA = 0, actualItemIgstA = 0;
+                let isIgstItem = itemIgstP > 0;
 
-                if (igstP > 0) {
-                    actualIgstA = !isNaN(itemIgstA) ? itemIgstA : (taxable * igstP) / 100;
-                    calcTotalGstForItem = actualIgstA;
-                    // For IGST items, CGST/SGST percentages and amounts are typically 0
-                    actualCgstA = 0;
-                    actualSgstA = 0;
-                } else { // CGST/SGST path
-                    actualCgstA = !isNaN(itemCgstA) ? itemCgstA : (taxable * cgstP) / 100;
-                    actualSgstA = !isNaN(itemSgstA) ? itemSgstA : (taxable * sgstP) / 100;
-                    calcTotalGstForItem = actualCgstA + actualSgstA;
-                    actualIgstA = 0; // Ensure IGST amount is 0 if it's a CGST/SGST item
+                if (isIgstItem) {
+                    actualItemIgstA = !isNaN(itemIgstA) ? itemIgstA : (taxable * itemIgstP) / 100;
+                    itemTotalGstAmount = actualItemIgstA;
+                } else {
+                    actualItemCgstA = !isNaN(itemCgstA) ? itemCgstA : (taxable * itemCgstP) / 100;
+                    actualItemSgstA = !isNaN(itemSgstA) ? itemSgstA : (taxable * itemSgstP) / 100;
+                    itemTotalGstAmount = actualItemCgstA + actualItemSgstA;
                 }
+                currentInvoice.totalGstAmount += itemTotalGstAmount;
+
+                const itemTotalRate = Math.round(itemCgstP + itemSgstP + itemIgstP);
                 
-                const itemTotalGstPercent = Math.round(cgstP + sgstP + igstP);
-
-                invoicesMaster[invNo].items.push({
-                    taxable: taxable,
-                    cgstP: (igstP > 0 ? 0 : cgstP), // If IGST, these are 0 for this item's context
-                    sgstP: (igstP > 0 ? 0 : sgstP),
-                    igstP: igstP,
-                    cgstA: actualCgstA, sgstA: actualSgstA, igstA: actualIgstA,
-                    totalItemGstA: calcTotalGstForItem,
-                    itemTotalGstPercent: itemTotalGstPercent // Combined rate for this item
-                });
-
-                // Accumulate for fixed GST buckets for the invoice
-                if (itemTotalGstPercent === 0) invoicesMaster[invNo].gstBucketTotals[0] += calcTotalGstForItem;
-                else if (itemTotalGstPercent === 5) invoicesMaster[invNo].gstBucketTotals[5] += calcTotalGstForItem;
-                else if (itemTotalGstPercent === 12) invoicesMaster[invNo].gstBucketTotals[12] += calcTotalGstForItem;
-                else if (itemTotalGstPercent === 18) invoicesMaster[invNo].gstBucketTotals[18] += calcTotalGstForItem;
-                else invoicesMaster[invNo].gstBucketTotals.other += calcTotalGstForItem;
-            });
-
-            const displayTableRows = [];
-            Object.keys(invoicesMaster).sort((a,b) => a.localeCompare(b, undefined, {numeric:true, sensitivity: 'base'})).forEach(invNo => {
-                const invoice = invoicesMaster[invNo];
-                const itemsByRate = {}; 
-
-                invoice.items.forEach(item => {
-                    const rateKey = item.itemTotalGstPercent; // Group by the actual combined rate of items
-                    if (!itemsByRate[rateKey]) {
-                        itemsByRate[rateKey] = {
-                            cgstP: 0, sgstP: 0, igstP: 0, // Will take from first item of this rate group
-                            isIgstGroup: item.igstP > 0, // Flag if this group is predominantly IGST
-                            taxableSum: 0, cgstASum: 0, sgstASum: 0, igstASum: 0, totalGstASum: 0,
-                            itemCount: 0
-                        };
+                let matchedSlab = gstSlabs.find(s => s.totalRate === itemTotalRate);
+                if (matchedSlab) {
+                    const slabData = currentInvoice.slabs[matchedSlab.label];
+                    slabData.taxable += taxable;
+                    if (isIgstItem) {
+                        slabData.igstA += actualItemIgstA;
+                    } else {
+                        slabData.cgstA += actualItemCgstA;
+                        slabData.sgstA += actualItemSgstA;
                     }
-                    if (itemsByRate[rateKey].itemCount === 0) { // Take P from first item in rate group
-                        itemsByRate[rateKey].cgstP = item.cgstP;
-                        itemsByRate[rateKey].sgstP = item.sgstP;
-                        itemsByRate[rateKey].igstP = item.igstP;
-                    }
-                    itemsByRate[rateKey].taxableSum += item.taxable;
-                    itemsByRate[rateKey].cgstASum += item.cgstA;
-                    itemsByRate[rateKey].sgstASum += item.sgstA;
-                    itemsByRate[rateKey].igstASum += item.igstA;
-                    itemsByRate[rateKey].totalGstASum += item.totalItemGstA;
-                    itemsByRate[rateKey].itemCount++;
-                });
-
-                Object.keys(itemsByRate).sort((a,b) => parseFloat(a) - parseFloat(b)).forEach(rateKey => {
-                    const rateGroup = itemsByRate[rateKey];
-                    displayTableRows.push({
-                        invoiceNo: invNo,
-                        invoiceDate: invoice.invoiceDate,
-                        stockistName: invoice.stockistName,
-                        gstNo: invoice.gstNo,
-                        cgstP_item: rateGroup.cgstP,
-                        sgstP_item: rateGroup.sgstP,
-                        igstP_item: rateGroup.igstP,
-                        taxable_rate: rateGroup.taxableSum,
-                        cgstA_rate: rateGroup.cgstASum,
-                        sgstA_rate: rateGroup.sgstASum,
-                        igstA_rate: rateGroup.igstASum,
-                        totalGstA_rate: rateGroup.totalGstASum,
-                        invGst0: invoice.gstBucketTotals[0],
-                        invGst5: invoice.gstBucketTotals[5],
-                        invGst12: invoice.gstBucketTotals[12],
-                        invGst18: invoice.gstBucketTotals[18],
-                        invGstOther: invoice.gstBucketTotals.other,
-                    });
-                });
+                } else {
+                    // Handle items not matching predefined slabs (e.g., add to an "Other" category or log)
+                    // For now, their GST is part of totalGstAmount, but not in specific slab columns
+                    console.warn(`Item with rate ${itemTotalRate}% in Inv ${invNo} did not match predefined slabs.`);
+                }
             });
-
-            if (displayTableRows.length === 0) {
-                showMsg('No data to display after processing. Check file content and column names.', 'yellow');
+            
+            if (Object.keys(invoicesData).length === 0) {
+                showMsg('No valid invoice data processed.', 'yellow');
                 return;
             }
-            displayResults(displayTableRows);
+            displayResults(invoicesData, gstSlabs);
         }
 
-        function displayResults(displayData) {
+        function displayResults(invoicesData, gstSlabs) {
             resultsHeader.innerHTML = ''; resultsBody.innerHTML = ''; resultsFooter.innerHTML = '';
             exportableData = [];
 
-            const headers = [
-                'Sl', 'Inv No', 'Inv Date', 'Stockist', 'GST No',
-                'CGST%(Item)', 'SGST%(Item)', 'IGST%(Item)', 'Taxable (Rate)',
-                'CGST Amt(Rate)', 'SGST Amt(Rate)', 'IGST Amt(Rate)', 'Total GST (Rate)',
-                'Inv GST@0%', 'Inv GST@5%', 'Inv GST@12%', 'Inv GST@18%', 'Inv GST@Other'
-            ];
-            exportableData.push(headers);
-            headers.forEach(h => {
+            const baseHeaders = ['Sl.No', 'Inv No', 'Inv Date', 'Supplier', 'GSTIN', 'Total Taxable'];
+            let slabHeaders = [];
+            gstSlabs.forEach(slab => {
+                slabHeaders.push(`Taxable @${slab.label}%`);
+                slabHeaders.push(`CGST ${slab.cgstRate}% Rate`); // Displaying the rate for clarity
+                slabHeaders.push(`CGST ${slab.label}% Amt`);
+                slabHeaders.push(`SGST ${slab.sgstRate}% Rate`);
+                slabHeaders.push(`SGST ${slab.label}% Amt`);
+                slabHeaders.push(`IGST ${slab.igstRate}% Rate`);
+                slabHeaders.push(`IGST ${slab.label}% Amt`);
+            });
+            const finalHeaders = ['Total GST Amt', 'Total Inv Value'];
+            const allHeaders = [...baseHeaders, ...slabHeaders, ...finalHeaders];
+            exportableData.push(allHeaders);
+
+            allHeaders.forEach(hText => {
                 const th = document.createElement('th');
                 th.className = 'px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
-                th.textContent = h;
+                th.textContent = hText;
                 resultsHeader.appendChild(th);
             });
-            
-
-            let sl = 1;
-            const grandTotals = {
-                taxable_rate: 0, cgstA_rate: 0, sgstA_rate: 0, igstA_rate: 0, totalGstA_rate: 0,
-            };
-            const summedInvoiceBuckets = { gst0:0, gst5:0, gst12:0, gst18:0, gstOther:0};
-            const processedInvoicesForBuckets = new Set();
 
             const fmt = (val) => (typeof val === 'number' ? val.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : (val || ''));
-            const fmtP = (val) => (typeof val === 'number' && val != undefined ? val.toFixed(2) + '%' : (val === 0 ? '0%' : '')); // Handle undefined for P
+            const fmtP = (val) => (typeof val === 'number' && val != undefined ? val.toFixed(1) + '%' : (val === 0 ? '0.0%' : '-')); // Percentages with one decimal
             const rawNum = (val) => (typeof val === 'number' && !isNaN(val) ? val : 0);
 
+            let slNo = 1;
+            const grandTotals = {
+                totalTaxable: 0,
+                slabs: {}, // To store grand totals for each slab's amounts
+                totalGst: 0,
+                totalInvoiceValue: 0
+            };
+            gstSlabs.forEach(slab => {
+                grandTotals.slabs[slab.label] = { taxable: 0, cgstA: 0, sgstA: 0, igstA: 0 };
+            });
 
-            displayData.forEach(row => {
+
+            Object.keys(invoicesData).sort((a,b) => a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'})).forEach(invNo => {
+                const inv = invoicesData[invNo];
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50';
 
-                tr.innerHTML = `
-                    <td class="px-3 py-2">${sl}</td>
-                    <td class="px-3 py-2">${row.invoiceNo}</td>
-                    <td class="px-3 py-2">${row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString('en-IN') : ''}</td> <!-- Basic date formatting -->
-                    <td class="px-3 py-2">${row.stockistName}</td>
-                    <td class="px-3 py-2">${row.gstNo}</td>
-                    <td class="px-3 py-2 text-right">${fmtP(row.cgstP_item)}</td>
-                    <td class="px-3 py-2 text-right">${fmtP(row.sgstP_item)}</td>
-                    <td class="px-3 py-2 text-right">${fmtP(row.igstP_item)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.taxable_rate)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.cgstA_rate)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.sgstA_rate)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.igstA_rate)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.totalGstA_rate)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.invGst0)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.invGst5)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.invGst12)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.invGst18)}</td>
-                    <td class="px-3 py-2 text-right">${fmt(row.invGstOther)}</td>
+                let rowHtml = `
+                    <td>${slNo}</td>
+                    <td>${invNo}</td>
+                    <td>${inv.invDate ? new Date(inv.invDate).toLocaleDateString('en-IN') : ''}</td>
+                    <td>${inv.supplier}</td>
+                    <td>${inv.gstin}</td>
+                    <td class="text-right">${fmt(inv.totalTaxableAmount)}</td>
                 `;
+                let exportRow = [slNo, invNo, (inv.invDate || ''), inv.supplier, inv.gstin, rawNum(inv.totalTaxableAmount)];
+
+                grandTotals.totalTaxable += rawNum(inv.totalTaxableAmount);
+
+                gstSlabs.forEach(slab => {
+                    const slabData = inv.slabs[slab.label];
+                    rowHtml += `<td class="text-right">${fmt(slabData.taxable)}</td>`; // Taxable @Slab%
+                    rowHtml += `<td class="text-right">${slabData.cgstA > 0 || (slabData.igstA === 0 && slab.cgstRate > 0) ? fmtP(slab.cgstRate) : '-'}</td>`; // CGST Rate%
+                    rowHtml += `<td class="text-right">${fmt(slabData.cgstA)}</td>`;   // CGST Amt
+                    rowHtml += `<td class="text-right">${slabData.sgstA > 0 || (slabData.igstA === 0 && slab.sgstRate > 0) ? fmtP(slab.sgstRate) : '-'}</td>`; // SGST Rate%
+                    rowHtml += `<td class="text-right">${fmt(slabData.sgstA)}</td>`;   // SGST Amt
+                    rowHtml += `<td class="text-right">${slabData.igstA > 0 ? fmtP(slab.igstRate) : '-'}</td>`; // IGST Rate%
+                    rowHtml += `<td class="text-right">${fmt(slabData.igstA)}</td>`;   // IGST Amt
+                    
+                    exportRow.push(rawNum(slabData.taxable));
+                    exportRow.push(slabData.cgstA > 0 || (slabData.igstA === 0 && slab.cgstRate > 0) ? slab.cgstRate : ''); // For export, maybe just rate number or blank
+                    exportRow.push(rawNum(slabData.cgstA));
+                    exportRow.push(slabData.sgstA > 0 || (slabData.igstA === 0 && slab.sgstRate > 0) ? slab.sgstRate : '');
+                    exportRow.push(rawNum(slabData.sgstA));
+                    exportRow.push(slabData.igstA > 0 ? slab.igstRate : '');
+                    exportRow.push(rawNum(slabData.igstA));
+
+                    grandTotals.slabs[slab.label].taxable += rawNum(slabData.taxable);
+                    grandTotals.slabs[slab.label].cgstA += rawNum(slabData.cgstA);
+                    grandTotals.slabs[slab.label].sgstA += rawNum(slabData.sgstA);
+                    grandTotals.slabs[slab.label].igstA += rawNum(slabData.igstA);
+                });
+
+                const totalInvoiceValue = inv.totalTaxableAmount + inv.totalGstAmount;
+                rowHtml += `<td class="text-right">${fmt(inv.totalGstAmount)}</td>`;
+                rowHtml += `<td class="text-right">${fmt(totalInvoiceValue)}</td>`;
+                tr.innerHTML = rowHtml;
                 resultsBody.appendChild(tr);
-                
-                exportableData.push([
-                    sl, row.invoiceNo, (row.invoiceDate || ''), row.stockistName, row.gstNo,
-                    fmtP(row.cgstP_item), fmtP(row.sgstP_item), fmtP(row.igstP_item),
-                    rawNum(row.taxable_rate), rawNum(row.cgstA_rate), rawNum(row.sgstA_rate), rawNum(row.igstA_rate), rawNum(row.totalGstA_rate),
-                    rawNum(row.invGst0), rawNum(row.invGst5), rawNum(row.invGst12), rawNum(row.invGst18), rawNum(row.invGstOther)
-                ]);
 
-                grandTotals.taxable_rate += rawNum(row.taxable_rate);
-                grandTotals.cgstA_rate += rawNum(row.cgstA_rate);
-                grandTotals.sgstA_rate += rawNum(row.sgstA_rate);
-                grandTotals.igstA_rate += rawNum(row.igstA_rate);
-                grandTotals.totalGstA_rate += rawNum(row.totalGstA_rate);
+                exportRow.push(rawNum(inv.totalGstAmount));
+                exportRow.push(rawNum(totalInvoiceValue));
+                exportableData.push(exportRow);
 
-                if (!processedInvoicesForBuckets.has(row.invoiceNo)) {
-                    summedInvoiceBuckets.gst0 += rawNum(row.invGst0);
-                    summedInvoiceBuckets.gst5 += rawNum(row.invGst5);
-                    summedInvoiceBuckets.gst12 += rawNum(row.invGst12);
-                    summedInvoiceBuckets.gst18 += rawNum(row.invGst18);
-                    summedInvoiceBuckets.gstOther += rawNum(row.invGstOther);
-                    processedInvoicesForBuckets.add(row.invoiceNo);
-                }
-                sl++;
+                grandTotals.totalGst += rawNum(inv.totalGstAmount);
+                grandTotals.totalInvoiceValue += rawNum(totalInvoiceValue);
+                slNo++;
             });
 
+            // Grand Total Footer Row
             const footerRow = document.createElement('tr');
-            footerRow.innerHTML = `
-                <td class="px-3 py-2 font-bold" colspan="8">Grand Total</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(grandTotals.taxable_rate)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(grandTotals.cgstA_rate)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(grandTotals.sgstA_rate)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(grandTotals.igstA_rate)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(grandTotals.totalGstA_rate)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(summedInvoiceBuckets.gst0)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(summedInvoiceBuckets.gst5)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(summedInvoiceBuckets.gst12)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(summedInvoiceBuckets.gst18)}</td>
-                <td class="px-3 py-2 text-right font-bold">${fmt(summedInvoiceBuckets.gstOther)}</td>
-            `;
+            let footerHtml = `<td class="font-bold" colspan="5">Grand Total</td> <td class="text-right font-bold">${fmt(grandTotals.totalTaxable)}</td>`;
+            let exportFooterRow = ['', '', '', '', 'Grand Total', rawNum(grandTotals.totalTaxable)];
+
+            gstSlabs.forEach(slab => {
+                const gtSlab = grandTotals.slabs[slab.label];
+                footerHtml += `<td class="text-right font-bold">${fmt(gtSlab.taxable)}</td>`;
+                footerHtml += `<td class="font-bold">-</td>`; // No aggregate rate for grand total
+                footerHtml += `<td class="text-right font-bold">${fmt(gtSlab.cgstA)}</td>`;
+                footerHtml += `<td class="font-bold">-</td>`;
+                footerHtml += `<td class="text-right font-bold">${fmt(gtSlab.sgstA)}</td>`;
+                footerHtml += `<td class="font-bold">-</td>`;
+                footerHtml += `<td class="text-right font-bold">${fmt(gtSlab.igstA)}</td>`;
+
+                exportFooterRow.push(rawNum(gtSlab.taxable), '', rawNum(gtSlab.cgstA), '', rawNum(gtSlab.sgstA), '', rawNum(gtSlab.igstA));
+            });
+            footerHtml += `<td class="text-right font-bold">${fmt(grandTotals.totalGst)}</td>`;
+            footerHtml += `<td class="text-right font-bold">${fmt(grandTotals.totalInvoiceValue)}</td>`;
+            footerRow.innerHTML = footerHtml;
             resultsFooter.appendChild(footerRow);
 
-            exportableData.push([
-                '', '', '', '', 'Grand Total', '', '', '',
-                rawNum(grandTotals.taxable_rate), rawNum(grandTotals.cgstA_rate), rawNum(grandTotals.sgstA_rate), rawNum(grandTotals.igstA_rate), rawNum(grandTotals.totalGstA_rate),
-                rawNum(summedInvoiceBuckets.gst0), rawNum(summedInvoiceBuckets.gst5), rawNum(summedInvoiceBuckets.gst12), rawNum(summedInvoiceBuckets.gst18), rawNum(summedInvoiceBuckets.gstOther)
-            ]);
+            exportFooterRow.push(rawNum(grandTotals.totalGst), rawNum(grandTotals.totalInvoiceValue));
+            exportableData.push(exportFooterRow);
 
             resultsContainer.classList.remove('hidden');
             downloadButton.classList.remove('hidden');
-            showMsg('Report generated successfully!', 'green');
+            showMsg('Report generated!', 'green');
         }
 
         downloadButton.onclick = () => {
-            if (exportableData.length <= 1) { showMsg('No data available to export.', 'yellow'); return; }
-            
+            if (exportableData.length <= 1) { showMsg('No data to export.', 'yellow'); return; }
             const ws = XLSX.utils.aoa_to_sheet(exportableData);
-            const wscols = [ 
-                {wch:5}, {wch:12}, {wch:10}, {wch:25}, {wch:15}, 
-                {wch:10}, {wch:10}, {wch:10}, {wch:14}, // Taxable slightly wider
-                {wch:14}, {wch:14}, {wch:14}, {wch:14}, // GST Amts wider
-                {wch:12}, {wch:12}, {wch:12}, {wch:12}, {wch:12}
-            ];
-            ws['!cols'] = wscols;
+            
+            // Define column widths - this will be a very wide table
+            const colWidths = [ {wch:5}, {wch:12}, {wch:10}, {wch:25}, {wch:15}, {wch:14} ]; // Base
+            gstSlabs.forEach(() => { // 7 columns per slab: Taxable, C Rate, C Amt, S Rate, S Amt, I Rate, I Amt
+                colWidths.push({wch:12}, {wch:8}, {wch:12}, {wch:8}, {wch:12}, {wch:8}, {wch:12});
+            });
+            colWidths.push({wch:14}, {wch:15}); // Total GST, Total Inv Value
+            ws['!cols'] = colWidths;
 
-            for (let R = 1; R < exportableData.length; ++R) { 
-                for (let C = 8; C <= 17; ++C) { // Columns for numeric values (Taxable Rate onwards)
-                    const cell_address = XLSX.utils.encode_cell({c:C, r:R});
-                    if(!ws[cell_address] || ws[cell_address].v === undefined) continue; 
-                    if(typeof ws[cell_address].v === 'number') {
-                        ws[cell_address].t = 'n'; 
-                        ws[cell_address].z = '#,##0.00'; 
+            // Apply number formatting to numeric columns in XLSX
+            for (let R = 1; R < exportableData.length; ++R) { // Skip header row
+                for (let C = 0; C < exportableData[R].length; ++C) {
+                    const cellValue = exportableData[R][C];
+                    if (typeof cellValue === 'number') {
+                        const cell_address = XLSX.utils.encode_cell({c:C, r:R});
+                        if(!ws[cell_address]) ws[cell_address] = {v: cellValue}; else ws[cell_address].v = cellValue;
+                        ws[cell_address].t = 'n';
+                        // Don't format rate columns that are pushed as numbers, only amount columns
+                        // Base headers: Taxable (idx 5)
+                        // Slab headers: Taxable (idx 0), CGST Amt (idx 2), SGST Amt (idx 4), IGST Amt (idx 6)
+                        // Final headers: Total GST (idx 0), Total Inv Value (idx 1)
+                        let isAmountColumn = (C === 5); // Total Taxable
+                        if (C > 5 && C < allHeaders.length - 2) { // Slab columns
+                            const slabColIndex = (C - 6) % 7; // 0=Tax, 1=CRate, 2=CAmt, 3=SRate, 4=SAmt, 5=IRate, 6=IAmt
+                            if (slabColIndex === 0 || slabColIndex === 2 || slabColIndex === 4 || slabColIndex === 6) {
+                                isAmountColumn = true;
+                            }
+                        } else if (C >= allHeaders.length - 2) { // Last two columns
+                            isAmountColumn = true;
+                        }
+
+                        if(isAmountColumn) {
+                           ws[cell_address].z = '#,##0.00';
+                        }
                     }
-                }
-                 // Format date column (assuming column 2, 0-indexed) if needed
-                const dateCellAddress = XLSX.utils.encode_cell({c:2, r:R});
-                if(ws[dateCellAddress] && ws[dateCellAddress].v) {
-                     // If it's already a date object from XLSX parsing, it might be okay.
-                     // If it's a string, you might want to parse and reformat, or ensure input is consistent.
-                     // For simplicity, we assume XLSX handles dates well from common Excel formats.
-                     // If it's a number (Excel date serial), you can set .t='d' or .z='dd-mmm-yy'
                 }
             }
             
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Adv Purchase Report");
-            XLSX.writeFile(wb, "Advanced_Purchase_Tax_Report.xlsx");
+            XLSX.utils.book_append_sheet(wb, ws, "GST Invoice Report");
+            XLSX.writeFile(wb, "GST_Invoice_Report_Slabwise.xlsx");
         };
     </script>
 </body>
