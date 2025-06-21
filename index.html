@@ -68,6 +68,17 @@
               messageContainer = getElem('message-container'), downloadButton = getElem('download-button');
         let exportableData = [];
 
+        // --- MODIFICATION: Moved gstSlabs to a higher scope ---
+        const gstSlabs = [
+            { totalRate: 0,  cgstRate: 0,   sgstRate: 0,   igstRate: 0,   label: "0" },
+            { totalRate: 5,  cgstRate: 2.5, sgstRate: 2.5, igstRate: 5,   label: "5" },
+            { totalRate: 12, cgstRate: 6,   sgstRate: 6,   igstRate: 12,  label: "12" },
+            { totalRate: 18, cgstRate: 9,   sgstRate: 9,   igstRate: 18,  label: "18" },
+            { totalRate: 28, cgstRate: 14,  sgstRate: 14,  igstRate: 28,  label: "28" }
+        ];
+        // --- END MODIFICATION ---
+
+
         const handleFileSelect = file => {
             if (!file) return;
             [resultsContainer, downloadButton].forEach(el => el.classList.add('hidden'));
@@ -115,11 +126,11 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: true}); // cellDates: true
+                    const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: true}); 
                     const firstSheetName = workbook.SheetNames[0];
                     if (!firstSheetName) { showMsg('XLSX: No sheets found.', 'red'); return; }
                     const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {raw: false, defval: null}); // raw: false for formatted dates
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {raw: false, defval: null}); 
                     if (!jsonData || jsonData.length === 0) {
                         showMsg('XLSX sheet is empty or unreadable.', 'red'); return;
                     }
@@ -134,24 +145,32 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // Helper to parse dates robustly, trying multiple formats
         function parseDate(dateStrOrObj) {
             if (dateStrOrObj instanceof Date && !isNaN(dateStrOrObj)) {
                 return dateStrOrObj;
             }
+            if (typeof dateStrOrObj !== 'string' && typeof dateStrOrObj !== 'number') return null; // Excel dates can be numbers
+
+            if (typeof dateStrOrObj === 'number') { // Handle Excel serial date number
+                const excelEpoch = new Date(1899, 11, 30); // Excel epoch starts Dec 30, 1899 for compatibility
+                const jsDate = new Date(excelEpoch.getTime() + dateStrOrObj * 24 * 60 * 60 * 1000);
+                if (jsDate && !isNaN(jsDate)) return jsDate;
+            }
+            
             if (typeof dateStrOrObj !== 'string') return null;
 
+
             const formats = [
-                (ds) => { const parts = ds.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/); return parts ? new Date(parts[3].length === 2 ? '20'+parts[3] : parts[3], parts[2]-1, parts[1]) : null; }, // dd-mm-yy or dd-mm-yyyy
-                (ds) => { const parts = ds.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/); return parts ? new Date(parts[1], parts[2]-1, parts[3]) : null; }, // yyyy-mm-dd
-                (ds) => { const parts = ds.match(/^(\d{1,2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2,4})$/i); // dd-Mon-yy
-                           if(parts) { const months = {"jan":0,"feb":1,"mar":2,"apr":3,"may":4,"jun":5,"jul":6,"aug":7,"sep":8,"oct":9,"nov":10,"dec":11}; return new Date(parts[3].length === 2 ? '20'+parts[3] : parts[3], months[parts[2].toLowerCase()], parts[1]); } return null; }
+                (ds) => { const parts = ds.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/); return parts ? new Date(parts[3].length === 2 ? '20'+parts[3] : parts[3], parseInt(parts[2])-1, parseInt(parts[1])) : null; }, 
+                (ds) => { const parts = ds.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/); return parts ? new Date(parseInt(parts[1]), parseInt(parts[2])-1, parseInt(parts[3])) : null; }, 
+                (ds) => { const parts = ds.match(/^(\d{1,2})-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2,4})$/i); 
+                           if(parts) { const months = {"jan":0,"feb":1,"mar":2,"apr":3,"may":4,"jun":5,"jul":6,"aug":7,"sep":8,"oct":9,"nov":10,"dec":11}; return new Date(parts[3].length === 2 ? '20'+parts[3] : parts[3], months[parts[2].toLowerCase()], parseInt(parts[1])); } return null; }
             ];
             for (const fmtFunc of formats) {
                 const date = fmtFunc(dateStrOrObj);
                 if (date && !isNaN(date)) return date;
             }
-            const directParse = new Date(dateStrOrObj); // Last resort
+            const directParse = new Date(dateStrOrObj); 
             return (directParse && !isNaN(directParse)) ? directParse : null;
         }
 
@@ -171,13 +190,6 @@
             }
 
             const invoicesData = {}; 
-            const gstSlabs = [
-                { totalRate: 0,  cgstRate: 0,   sgstRate: 0,   igstRate: 0,   label: "0" },
-                { totalRate: 5,  cgstRate: 2.5, sgstRate: 2.5, igstRate: 5,   label: "5" },
-                { totalRate: 12, cgstRate: 6,   sgstRate: 6,   igstRate: 12,  label: "12" },
-                { totalRate: 18, cgstRate: 9,   sgstRate: 9,   igstRate: 18,  label: "18" },
-                { totalRate: 28, cgstRate: 14,  sgstRate: 14,  igstRate: 28,  label: "28" }
-            ];
 
             data.forEach(row => {
                 const invNo = String(row[C.INV_NO] || '').trim();
@@ -186,13 +198,14 @@
                 const parsedInvDate = parseDate(row[C.INV_DATE]);
                 if (!parsedInvDate) {
                     console.warn(`Skipping Inv ${invNo} due to unparseable date: ${row[C.INV_DATE]}`);
-                    return; // Skip if date is crucial and unparseable
+                    // Decide if you want to skip or use a default/original string
+                    // return; // Uncomment to skip if date is absolutely mandatory
                 }
 
                 if (!invoicesData[invNo]) {
                     invoicesData[invNo] = {
-                        invDateObj: parsedInvDate, // Store parsed Date object
-                        invDateStr: row[C.INV_DATE], // Original string for display if needed
+                        invDateObj: parsedInvDate, 
+                        invDateStr: String(row[C.INV_DATE] || ''), // Keep original for display if parse fails
                         supplier: row[C.PARTY],
                         gstin: row[C.GST_NO] || '',
                         totalTaxableAmount: 0,
@@ -247,19 +260,19 @@
             if (Object.keys(invoicesData).length === 0) {
                 showMsg('No valid invoice data processed.', 'yellow'); return;
             }
-            displayResults(invoicesData, gstSlabs);
+            displayResults(invoicesData); // gstSlabs is now global
         }
 
-        function displayResults(invoicesData, gstSlabs) {
+        function displayResults(invoicesData) { // gstSlabs is now global
             resultsHeader.innerHTML = ''; resultsBody.innerHTML = ''; resultsFooter.innerHTML = '';
             exportableData = [];
 
             const baseHeaders = ['Sl.No', 'Inv No', 'Inv Date', 'Supplier', 'GSTIN', 'Total Taxable'];
             let slabHeaders = [];
-            gstSlabs.forEach(slab => { // Corrected heading format
+            gstSlabs.forEach(slab => { 
                 slabHeaders.push(`Taxable @${slab.totalRate}%`);
-                slabHeaders.push(`CGST ${slab.cgstRate}%`); // Rate column
-                slabHeaders.push(`CGST ${slab.cgstRate}% Amt`); // Amount column with individual rate
+                slabHeaders.push(`CGST ${slab.cgstRate}%`); 
+                slabHeaders.push(`CGST ${slab.cgstRate}% Amt`); 
                 slabHeaders.push(`SGST ${slab.sgstRate}%`);
                 slabHeaders.push(`SGST ${slab.sgstRate}% Amt`);
                 slabHeaders.push(`IGST ${slab.igstRate}%`);
@@ -284,30 +297,31 @@
             const grandTotals = { totalTaxable: 0, slabs: {}, totalGst: 0, totalInvoiceValue: 0 };
             gstSlabs.forEach(slab => { grandTotals.slabs[slab.label] = { taxable: 0, cgstA: 0, sgstA: 0, igstA: 0 }; });
 
-            // Sort invoices by date
             const sortedInvoiceKeys = Object.keys(invoicesData).sort((keyA, keyB) => {
                 const dateA = invoicesData[keyA].invDateObj;
                 const dateB = invoicesData[keyB].invDateObj;
-                if (!dateA && !dateB) return 0;
-                if (!dateA) return 1; // Put invoices with no valid date at the end
-                if (!dateB) return -1;
-                return dateA - dateB; // Sort ascending
+                if (!dateA && !dateB) return 0; // if both dates are invalid, don't change order
+                if (!dateA) return 1; // invoices with invalid dates go to the end
+                if (!dateB) return -1; // invoices with invalid dates go to the end
+                return dateA.getTime() - dateB.getTime(); // Standard date comparison
             });
 
             sortedInvoiceKeys.forEach(invNo => {
                 const inv = invoicesData[invNo];
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50';
+                const displayDate = inv.invDateObj ? inv.invDateObj.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) : inv.invDateStr;
+
 
                 let rowHtml = `
                     <td>${slNo}</td>
                     <td>${invNo}</td>
-                    <td>${inv.invDateObj ? inv.invDateObj.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) : inv.invDateStr || ''}</td>
+                    <td>${displayDate}</td>
                     <td>${fmt(inv.supplier)}</td>
                     <td>${fmt(inv.gstin)}</td>
                     <td class="text-right">${fmt(inv.totalTaxableAmount)}</td>
                 `;
-                let exportRow = [slNo, invNo, inv.invDateObj ? inv.invDateObj.toLocaleDateString('en-IN') : (inv.invDateStr || ''), fmt(inv.supplier), fmt(inv.gstin), rawNum(inv.totalTaxableAmount)];
+                let exportRow = [slNo, invNo, displayDate, fmt(inv.supplier), fmt(inv.gstin), rawNum(inv.totalTaxableAmount)];
 
                 grandTotals.totalTaxable += rawNum(inv.totalTaxableAmount);
 
@@ -386,18 +400,18 @@
             if (exportableData.length <= 1) { showMsg('No data to export.', 'yellow'); return; }
             
             const ws = XLSX.utils.aoa_to_sheet(exportableData);
-            const baseColCount = 6; // Sl, InvNo, InvDate, Supp, GSTIN, TotalTaxable
-            const colsPerSlab = 7; // Taxable@Slab, C-Rate, C-Amt, S-Rate, S-Amt, I-Rate, I-Amt
-            const finalColCount = 2; // TotalGST, TotalInvValue
+            const baseColCount = 6; 
+            const colsPerSlab = 7; 
             
             const colWidths = [ {wch:5}, {wch:12}, {wch:12}, {wch:25}, {wch:15}, {wch:14} ]; 
+            // --- MODIFICATION: Use global gstSlabs here ---
             gstSlabs.forEach(() => { 
                 colWidths.push({wch:12}, {wch:8}, {wch:12}, {wch:8}, {wch:12}, {wch:8}, {wch:12});
             });
+            // --- END MODIFICATION ---
             colWidths.push({wch:14}, {wch:15}); 
             ws['!cols'] = colWidths;
 
-            // Apply number formatting
             for (let R = 1; R < exportableData.length; ++R) { 
                 for (let C = 0; C < exportableData[R].length; ++C) {
                     const cellValue = exportableData[R][C];
@@ -407,15 +421,17 @@
                         ws[cell_address].t = 'n';
                         
                         let isRateCol = false;
+                        // --- MODIFICATION: Use global gstSlabs here ---
                         if (C >= baseColCount && C < baseColCount + gstSlabs.length * colsPerSlab) {
+                        // --- END MODIFICATION ---
                             const slabColIdx = (C - baseColCount) % colsPerSlab;
-                            if (slabColIdx === 1 || slabColIdx === 3 || slabColIdx === 5) isRateCol = true; // Rate columns
+                            if (slabColIdx === 1 || slabColIdx === 3 || slabColIdx === 5) isRateCol = true; 
                         }
 
-                        if (isRateCol) {
-                             ws[cell_address].z = '0.0"%"'; // Format as percentage with one decimal
-                        } else {
-                             ws[cell_address].z = '#,##0.00'; // Amount format
+                        if (isRateCol && cellValue !== '') { // Apply % format only if value is not blank
+                             ws[cell_address].z = '0.0"%"'; 
+                        } else if (!isRateCol) { // Apply amount format
+                             ws[cell_address].z = '#,##0.00'; 
                         }
                     }
                 }
